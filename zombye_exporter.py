@@ -45,7 +45,7 @@ def mesh_data(mesh):
 
 			vertexattributes = {}
 			vertexattributes["position"] = [pos.x, pos.z, -pos.y]
-			vertexattributes["texcoord"] = [uv.x, uv.y]
+			vertexattributes["texcoord"] = [uv.x, -uv.y]
 			vertexattributes["normal"] = [nor.x, nor.z, -nor.y]
 			if vertices.count(vertexattributes) == 0:
 				vertices.append(vertexattributes)
