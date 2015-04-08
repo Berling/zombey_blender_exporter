@@ -2,37 +2,40 @@ import bpy
 import json
 import bmesh
 
-def mesh_data(mesh):
+def mesh_data(b_mesh, mesh):
 	meshdata = {}
 	vertices = []
 	indices = []
 	submeshes = {}
 
-	uv_layer = mesh.loops.layers.uv.active
+	uv_layer = b_mesh.loops.layers.uv.active
 	if uv_layer is None:
-		raise TypeError("mesh %s has no active uv layer" %mesh.name)
+		raise TypeError("mesh %s has no active uv layer" %b_mesh.name)
 
-	for face in mesh.faces:
+	for face in b_mesh.faces:
 		triangle = []
 
 		material_index = face.material_index
-		material = bpy.data.materials[material_index]
+		material = mesh.materials[material_index]
 		if material.name not in submeshes:
 			submeshes[material.name] = {}
 			submeshes[material.name]["indices"] = []
 			submeshes[material.name]["textures"] = {}
 
 			texture_slots = material.texture_slots
-			if "diffuse" not in texture_slots:
+			diffuse_texture = [value for key, value in texture_slots.items() if "diffuse" in key]
+			if not diffuse_texture:
 				raise ValueError("material %s has no diffuse texture" %material.name)
-			if "normal" not in texture_slots:
+			normal_texture = [value for key, value in texture_slots.items() if "normal" in key]
+			if not normal_texture:
 				raise ValueError("material %s has no normal texture" %material.name)
-			if "material" not in texture_slots:
+			material_texture = [value for key, value in texture_slots.items() if "material" in key]
+			if not material_texture:
 				raise ValueError("material %s has no material texture" %material.name)
 
-			submeshes[material.name]["textures"]["diffuse"] = bpy.path.abspath(texture_slots["diffuse"].texture.image.filepath)
-			submeshes[material.name]["textures"]["normal"] = bpy.path.abspath(texture_slots["normal"].texture.image.filepath)
-			submeshes[material.name]["textures"]["material"] = bpy.path.abspath(texture_slots["material"].texture.image.filepath)
+			submeshes[material.name]["textures"]["diffuse"] = bpy.path.abspath(diffuse_texture[0].texture.image.filepath)
+			submeshes[material.name]["textures"]["normal"] = bpy.path.abspath(normal_texture[0].texture.image.filepath)
+			submeshes[material.name]["textures"]["material"] = bpy.path.abspath(material_texture[0].texture.image.filepath)
 
 		for loop in face.loops:
 			vert = loop.vert
@@ -70,7 +73,7 @@ def write_model_data(context, filepath, use_some_setting):
 			bm = bmesh.new()
 			bm.from_mesh(mesh)
 			bmesh.ops.triangulate(bm, faces=bm.faces)
-			meshes[mesh.name] = mesh_data(bm)
+			meshes[mesh.name] = mesh_data(bm, mesh)
 			bm.free()
 			del bm
 
