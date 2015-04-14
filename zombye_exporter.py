@@ -74,16 +74,16 @@ def mesh_data(obj, anim_data):
 					raise ValueError("vertex is assigned to too many vertex groups")
 				if len(dvert.values()) == 0:
 					parent_name = vertex_groups
-					vertexattributes["index"] = [0]
-					vertexattributes["weight"] = [1.0]
+					vertexattributes["indices"] = [0]
+					vertexattributes["weights"] = [1.0]
 				else:
-					vertexattributes["index"] = []
-					vertexattributes["weight"] = []
+					vertexattributes["indices"] = []
+					vertexattributes["weights"] = []
 					for key, value in dvert.items():
 						bone_name = vertex_groups[key].name
 						index = anim_data["skeleton"][bone_name]["id"]
-						vertexattributes["index"].append(index)
-						vertexattributes["weight"].append(value)
+						vertexattributes["indices"].append(index)
+						vertexattributes["weights"].append(value)
 
 		submeshes[material.name]["indices"].append(triangle)
 
