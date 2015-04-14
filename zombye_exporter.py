@@ -1,22 +1,35 @@
 import bpy
 import json
 import bmesh
+from mathutils import Matrix
 
-def mesh_data(b_mesh, mesh):
+def mesh_data(obj, anim_data):
+	mesh = bmesh.new()
+	mesh.from_mesh(obj.data)
+	bmesh.ops.triangulate(mesh, faces=mesh.faces)
+	name = obj.data.name
+	write_weights = False
+	vertex_groups = obj.vertex_groups
+	dvert_layer = mesh.verts.layers.deform.active
+
+	if dvert_layer is None:
+		raise ValueError("object has no vertex groups")
+
+	materials = obj.material_slots
 	meshdata = {}
 	vertices = []
 	indices = []
 	submeshes = {}
 
-	uv_layer = b_mesh.loops.layers.uv.active
+	uv_layer = mesh.loops.layers.uv.active
 	if uv_layer is None:
-		raise TypeError("mesh %s has no active uv layer" %b_mesh.name)
+		raise TypeError("mesh %s has no active uv layer" %name)
 
-	for face in b_mesh.faces:
+	for face in mesh.faces:
 		triangle = []
 
 		material_index = face.material_index
-		material = mesh.materials[material_index]
+		material = materials[material_index].material
 		if material.name not in submeshes:
 			submeshes[material.name] = {}
 			submeshes[material.name]["indices"] = []
@@ -55,12 +68,69 @@ def mesh_data(b_mesh, mesh):
 
 			triangle.append(vertices.index(vertexattributes))
 
+			if anim_data is not None:
+				dvert = vert[dvert_layer]
+				if len(dvert.values()) > 4:
+					raise ValueError("vertex is assigned to too many vertex groups")
+				if len(dvert.values()) == 0:
+					parent_name = vertex_groups
+					vertexattributes["index"] = [0]
+					vertexattributes["weight"] = [1.0]
+				else:
+					vertexattributes["index"] = []
+					vertexattributes["weight"] = []
+					for key, value in dvert.items():
+						bone_name = vertex_groups[key].name
+						index = anim_data["skeleton"][bone_name]["id"]
+						vertexattributes["index"].append(index)
+						vertexattributes["weight"].append(value)
+
 		submeshes[material.name]["indices"].append(triangle)
 
 	meshdata["vertices"] = vertices
 	meshdata["submeshes"] = submeshes
 
-	return meshdata
+	mesh.free()
+	del mesh
+
+	modeldata = {}
+	modeldata.update(meshdata)
+	modeldata.update(anim_data)
+
+	return modeldata
+
+def anim_data(armature):
+	armature_data = {}
+	armature_data["skeleton"] = {}
+	bone_ids = {}
+	ids = 0
+
+	for bone in armature.bones:
+		bone_data = {}
+		if bone.name not in bone_ids:
+			bone_ids[bone.name] = ids
+			ids += 1
+		bone_data["id"] = bone_ids[bone.name]
+		parent = bone.parent
+		if parent is None:
+			bone_data["parent"] = None
+		else:
+			if parent.name not in bone_ids:
+				bone_ids[parent.name] = ids
+				ids += 1
+			bone_data["parent"] = bone_ids[parent.name]
+
+		transformation = bone.matrix_local
+		pos = transformation.to_translation()
+		bone_data["translation"] = [pos.x, pos.z, -pos.y]
+		rot = transformation.to_quaternion()
+		bone_data["rotation"] = [rot.w, rot.x, rot.y, rot.z]
+		scale = transformation.to_scale()
+		bone_data["scale"] = [scale.x, scale.z, -scale.y]
+
+		armature_data["skeleton"][bone.name] = bone_data
+
+	return armature_data
 
 def dump_json(file, data):
 	file.write(json.dumps(data, indent="\t", separators=(',',' : ')))
@@ -68,14 +138,14 @@ def dump_json(file, data):
 def write_model_data(context, filepath, use_some_setting):
 	f = open(filepath, 'w', encoding='utf-8')
 	meshes = {}
-	for mesh in bpy.data.meshes:
-		if mesh.users > 0:
-			bm = bmesh.new()
-			bm.from_mesh(mesh)
-			bmesh.ops.triangulate(bm, faces=bm.faces)
-			meshes[mesh.name] = mesh_data(bm, mesh)
-			bm.free()
-			del bm
+	for obj in bpy.data.objects:
+		if obj.users > 0:
+			if obj.type == 'MESH':
+				armature = obj.find_armature()
+				if armature is not None:
+					meshes[obj.name] = mesh_data(obj, anim_data(armature.data))
+				else:
+					meshes[obj.name] = mesh_data(obj, None)
 
 	dump_json(f, meshes)
 
