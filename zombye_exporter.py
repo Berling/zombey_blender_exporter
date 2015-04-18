@@ -8,12 +8,12 @@ def mesh_data(obj, anim_data):
 	mesh.from_mesh(obj.data)
 	bmesh.ops.triangulate(mesh, faces=mesh.faces)
 	name = obj.data.name
-	write_weights = False
+	write_skin = False
 	vertex_groups = obj.vertex_groups
 	dvert_layer = mesh.verts.layers.deform.active
 
 	if dvert_layer is None:
-		raise ValueError("object has no vertex groups")
+		write_skin = True
 
 	materials = obj.material_slots
 	meshdata = {}
@@ -68,7 +68,7 @@ def mesh_data(obj, anim_data):
 
 			triangle.append(vertices.index(vertexattributes))
 
-			if anim_data is not None:
+			if anim_data is not None and vertex_groups is not None:
 				dvert = vert[dvert_layer]
 				if len(dvert.values()) > 4:
 					raise ValueError("vertex is assigned to too many vertex groups")
@@ -95,7 +95,8 @@ def mesh_data(obj, anim_data):
 
 	modeldata = {}
 	modeldata.update(meshdata)
-	modeldata.update(anim_data)
+	if anim_data is not None:
+		modeldata.update(anim_data)
 
 	return modeldata
 
@@ -129,6 +130,39 @@ def anim_data(armature):
 		bone_data["scale"] = [scale.x, scale.z, -scale.y]
 
 		armature_data["skeleton"][bone.name] = bone_data
+
+	armature_data["animations"] = {}
+	for action in bpy.data.actions:
+		armature_data["animations"][action.name] = {}
+		frame_range = action.frame_range
+		armature_data["animations"][action.name]["start"] = frame_range[0]
+		armature_data["animations"][action.name]["end"] = frame_range[1]
+		old_name = ""
+		for fcu in action.fcurves:
+			bone_name = fcu.data_path
+			bone_name = bone_name[12:len(bone_name)]
+			bone_name = bone_name[0:bone_name.find("\"")]
+
+			if bone_name not in armature_data["animations"][action.name]:
+				armature_data["animations"][action.name][bone_name] = {}
+
+			transformation_name = fcu.data_path
+			transformation_name = transformation_name[transformation_name.rfind(".") + 1:len(transformation_name)]
+			trans = armature_data["animations"][action.name][bone_name]
+			if transformation_name not in trans:
+				trans[transformation_name] = []
+
+			index = 0
+			for keyframe in fcu.keyframe_points:
+				if transformation_name != old_name:
+					trans[transformation_name].append({});
+					trans[transformation_name][-1]["frame"] = keyframe.co.x
+					trans[transformation_name][-1]["data"] = []
+
+				trans[transformation_name][index]["data"].append(keyframe.co.y)
+				index += 1
+
+			old_name = transformation_name
 
 	return armature_data
 
