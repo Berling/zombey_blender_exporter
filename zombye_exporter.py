@@ -1,7 +1,7 @@
 import bpy
 import json
 import bmesh
-from mathutils import Matrix
+from mathutils import Matrix, Quaternion
 
 def mesh_data(obj, anim_data):
 	mesh = bmesh.new()
@@ -106,6 +106,14 @@ def anim_data(armature):
 	bone_ids = {}
 	ids = 0
 
+	rot_offset = Quaternion()
+	rot_offset.w = 0.7071068286895752
+	rot_offset.x = 0.7071067690849304
+	rot_offset.invert()
+
+	armature_data["bone_hierachy"] = {}
+	for i in range(0, len(armature.bones)):
+		armature_data["bone_hierachy"][i] = []
 	for bone in armature.bones:
 		bone_data = {}
 		if bone.name not in bone_ids:
@@ -113,6 +121,8 @@ def anim_data(armature):
 			ids += 1
 		bone_data["id"] = bone_ids[bone.name]
 		parent = bone.parent
+		parent_transformation = Matrix()
+		parent_transformation.identity()
 		if parent is None:
 			bone_data["parent"] = None
 		else:
@@ -120,12 +130,16 @@ def anim_data(armature):
 				bone_ids[parent.name] = ids
 				ids += 1
 			bone_data["parent"] = bone_ids[parent.name]
+			parent_transformation = armature.bones[bone_data["parent"]].matrix_local
+			armature_data["bone_hierachy"][bone_data["parent"]].append(bone_data["id"])
 
 		transformation = bone.matrix_local
+		rot = transformation.to_quaternion() * rot_offset
+		rot.normalize()
+		bone_data["rotation"] = [rot.w, rot.x, rot.y, rot.z]
+		transformation = bone.matrix_local * parent_transformation.inverted()
 		pos = transformation.to_translation()
 		bone_data["translation"] = [pos.x, pos.z, -pos.y]
-		rot = transformation.to_quaternion()
-		bone_data["rotation"] = [rot.w, rot.x, rot.y, rot.z]
 		scale = transformation.to_scale()
 		bone_data["scale"] = [scale.x, scale.z, -scale.y]
 
@@ -135,20 +149,22 @@ def anim_data(armature):
 	for action in bpy.data.actions:
 		armature_data["animations"][action.name] = {}
 		frame_range = action.frame_range
-		armature_data["animations"][action.name]["start"] = frame_range[0]
-		armature_data["animations"][action.name]["end"] = frame_range[1]
+		armature_data["animations"][action.name]["length"] = frame_range[1] - frame_range[0]
+		armature_data["animations"][action.name]["tracks"] = {}
 		old_name = ""
 		for fcu in action.fcurves:
 			bone_name = fcu.data_path
 			bone_name = bone_name[12:len(bone_name)]
 			bone_name = bone_name[0:bone_name.find("\"")]
+			bone_id = bone_ids[bone_name]
 
-			if bone_name not in armature_data["animations"][action.name]:
-				armature_data["animations"][action.name][bone_name] = {}
+			if bone_name not in armature_data["animations"][action.name]["tracks"]:
+				armature_data["animations"][action.name]["tracks"][bone_name] = {}
+				armature_data["animations"][action.name]["tracks"][bone_name]["id"] = bone_id
 
 			transformation_name = fcu.data_path
 			transformation_name = transformation_name[transformation_name.rfind(".") + 1:len(transformation_name)]
-			trans = armature_data["animations"][action.name][bone_name]
+			trans = armature_data["animations"][action.name]["tracks"][bone_name]
 			if transformation_name not in trans:
 				trans[transformation_name] = []
 
@@ -156,7 +172,7 @@ def anim_data(armature):
 			for keyframe in fcu.keyframe_points:
 				if transformation_name != old_name:
 					trans[transformation_name].append({});
-					trans[transformation_name][-1]["frame"] = keyframe.co.x
+					trans[transformation_name][-1]["frame"] = keyframe.co.x - frame_range[0]
 					trans[transformation_name][-1]["data"] = []
 
 				trans[transformation_name][index]["data"].append(keyframe.co.y)
