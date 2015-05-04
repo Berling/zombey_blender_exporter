@@ -3,7 +3,7 @@ import json
 import bmesh
 from mathutils import Matrix, Quaternion
 
-def mesh_data(obj, anim_data):
+def mesh_data(obj, anim_data, bone_ids):
 	mesh = bmesh.new()
 	mesh.from_mesh(obj.data)
 	bmesh.ops.triangulate(mesh, faces=mesh.faces)
@@ -81,7 +81,7 @@ def mesh_data(obj, anim_data):
 					vertexattributes["weights"] = []
 					for key, value in dvert.items():
 						bone_name = vertex_groups[key].name
-						index = anim_data["skeleton"][bone_name]["id"]
+						index = anim_data["skeleton"][bone_ids[bone_name]]["id"]
 						vertexattributes["indices"].append(index)
 						vertexattributes["weights"].append(value)
 
@@ -100,10 +100,9 @@ def mesh_data(obj, anim_data):
 
 	return modeldata
 
-def anim_data(armature):
+def anim_data(armature, bone_ids):
 	armature_data = {}
 	armature_data["skeleton"] = {}
-	bone_ids = {}
 	ids = 0
 
 	rot_offset = Quaternion()
@@ -143,7 +142,7 @@ def anim_data(armature):
 		scale = transformation.to_scale()
 		bone_data["scale"] = [scale.x, scale.z, -scale.y]
 
-		armature_data["skeleton"][bone.name] = bone_data
+		armature_data["skeleton"][bone_ids[bone.name]] = bone_data
 
 	armature_data["animations"] = {}
 	for action in bpy.data.actions:
@@ -193,7 +192,8 @@ def write_model_data(context, filepath, use_some_setting):
 			if obj.type == 'MESH':
 				armature = obj.find_armature()
 				if armature is not None:
-					meshes[obj.name] = mesh_data(obj, anim_data(armature.data))
+					bone_ids = {}
+					meshes[obj.name] = mesh_data(obj, anim_data(armature.data, bone_ids), bone_ids)
 				else:
 					meshes[obj.name] = mesh_data(obj, None)
 
