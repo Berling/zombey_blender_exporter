@@ -60,9 +60,9 @@ def mesh_data(obj, anim_data, bone_ids):
 			uv = loop[uv_layer].uv
 
 			vertexattributes = {}
-			vertexattributes["position"] = [pos.x, pos.z, -pos.y]
-			vertexattributes["texcoord"] = [uv.x, -uv.y]
-			vertexattributes["normal"] = [nor.x, nor.z, -nor.y]
+			vertexattributes["position"] = [pos.x, pos.y, pos.z]
+			vertexattributes["texcoord"] = [uv.x, uv.y]
+			vertexattributes["normal"] = [nor.x, nor.y, nor.z]
 			if vertices.count(vertexattributes) == 0:
 				vertices.append(vertexattributes)
 
@@ -109,6 +109,8 @@ def anim_data(armature, bone_ids):
 	rot_offset.w = 0.7071068286895752
 	rot_offset.x = 0.7071067690849304
 	rot_offset.invert()
+	#global_matrix = (rot_offset.to_matrix()).to_4x4()
+	#armature.matrix_global = global_matrix * armature.matrix_global * global_matrix.transpose()
 
 	armature_data["bone_hierachy"] = {}
 	for i in range(0, len(armature.bones)):
@@ -132,15 +134,14 @@ def anim_data(armature, bone_ids):
 			parent_transformation = armature.bones[bone_data["parent"]].matrix_local
 			armature_data["bone_hierachy"][bone_data["parent"]].append(bone_data["id"])
 
-		transformation = bone.matrix_local
-		rot = transformation.to_quaternion() * rot_offset
+		transformation = parent_transformation.inverted() * bone.matrix_local
+		rot = transformation.to_quaternion()
 		rot.normalize()
 		bone_data["rotation"] = [rot.w, rot.x, rot.y, rot.z]
-		transformation = bone.matrix_local * parent_transformation.inverted()
 		pos = transformation.to_translation()
-		bone_data["translation"] = [pos.x, pos.z, -pos.y]
+		bone_data["translation"] = [pos.x, pos.y, pos.z]
 		scale = transformation.to_scale()
-		bone_data["scale"] = [scale.x, scale.z, -scale.y]
+		bone_data["scale"] = [scale.x, scale.y, scale.z]
 
 		armature_data["skeleton"][bone_ids[bone.name]] = bone_data
 
