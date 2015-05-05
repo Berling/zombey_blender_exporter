@@ -105,13 +105,6 @@ def anim_data(armature, bone_ids):
 	armature_data["skeleton"] = {}
 	ids = 0
 
-	rot_offset = Quaternion()
-	rot_offset.w = 0.7071068286895752
-	rot_offset.x = 0.7071067690849304
-	rot_offset.invert()
-	#global_matrix = (rot_offset.to_matrix()).to_4x4()
-	#armature.matrix_global = global_matrix * armature.matrix_global * global_matrix.transpose()
-
 	armature_data["bone_hierachy"] = {}
 	for i in range(0, len(armature.bones)):
 		armature_data["bone_hierachy"][i] = []
@@ -185,7 +178,7 @@ def anim_data(armature, bone_ids):
 def dump_json(file, data):
 	file.write(json.dumps(data, indent="\t", separators=(',',' : ')))
 
-def write_model_data(context, filepath, use_some_setting):
+def write_model_data(context, filepath):
 	f = open(filepath, 'w', encoding='utf-8')
 	meshes = {}
 	for obj in bpy.data.objects:
@@ -225,24 +218,8 @@ class export_zombye_model(Operator, ExportHelper):
 			options={'HIDDEN'},
 			)
 
-	# List of operator properties, the attributes will be assigned
-	# to the class instance from the operator settings before calling.
-	use_setting = BoolProperty(
-			name="Example Boolean",
-			description="Example Tooltip",
-			default=True,
-			)
-
-	type = EnumProperty(
-			name="Example Enum",
-			description="Choose between two items",
-			items=(('OPT_A', "First Option", "Description one"),
-				   ('OPT_B', "Second Option", "Description two")),
-			default='OPT_A',
-			)
-
 	def execute(self, context):
-		return write_model_data(context, self.filepath, self.use_setting)
+		return write_model_data(context, self.filepath)
 
 
 # Only needed if you want to add into a dynamic menu
